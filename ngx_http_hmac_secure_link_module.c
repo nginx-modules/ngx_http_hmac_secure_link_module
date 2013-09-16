@@ -42,7 +42,7 @@ static char *ngx_http_secure_link_merge_conf(ngx_conf_t *cf, void *parent,
 static ngx_int_t ngx_http_secure_link_add_variables(ngx_conf_t *cf);
 
 
-static ngx_command_t  ngx_http_secure_link_commands[] = {
+static ngx_command_t  ngx_http_hmac_secure_link_commands[] = {
 
     { ngx_string("secure_link"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
@@ -105,10 +105,10 @@ static ngx_http_module_t  ngx_http_secure_link_module_ctx = {
 };
 
 
-ngx_module_t  ngx_http_secure_link_module = {
+ngx_module_t  ngx_http_hmac_secure_link_module = {
     NGX_MODULE_V1,
     &ngx_http_secure_link_module_ctx,      /* module context */
-    ngx_http_secure_link_commands,         /* module directives */
+    ngx_http_hmac_secure_link_commands,    /* module directives */
     NGX_HTTP_MODULE,                       /* module type */
     NULL,                                  /* init master */
     NULL,                                  /* init module */
@@ -138,7 +138,7 @@ ngx_http_secure_link_variable(ngx_http_request_t *r,
     ngx_http_secure_link_conf_t  *conf;
     u_char                        hash_buf[16], md5_buf[16];
 
-    conf = ngx_http_get_module_loc_conf(r, ngx_http_secure_link_module);
+    conf = ngx_http_get_module_loc_conf(r, ngx_http_hmac_secure_link_module);
 
     if (conf->secret.len) {
         return ngx_http_secure_link_old_variable(r, conf, v, data);
@@ -177,7 +177,7 @@ ngx_http_secure_link_variable(ngx_http_request_t *r,
             return NGX_ERROR;
         }
 
-        ngx_http_set_ctx(r, ctx, ngx_http_secure_link_module);
+        ngx_http_set_ctx(r, ctx, ngx_http_hmac_secure_link_module);
 
         ctx->expires.len = last - p;
         ctx->expires.data = p;
@@ -341,7 +341,7 @@ ngx_http_secure_link_hmac_variable(ngx_http_request_t *r,
             return NGX_ERROR;
         }
 
-        ngx_http_set_ctx(r, ctx, ngx_http_secure_link_module);
+        ngx_http_set_ctx(r, ctx, ngx_http_hmac_secure_link_module);
 
         ctx->expires.len = last - p;
         ctx->expires.data = p;
@@ -407,7 +407,7 @@ ngx_http_secure_link_expires_variable(ngx_http_request_t *r,
 {
     ngx_http_secure_link_ctx_t  *ctx;
 
-    ctx = ngx_http_get_module_ctx(r, ngx_http_secure_link_module);
+    ctx = ngx_http_get_module_ctx(r, ngx_http_hmac_secure_link_module);
 
     if (ctx) {
         v->len = ctx->expires.len;
