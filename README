@@ -117,7 +117,7 @@ location ^~ /backend_location/ {
                 secure_link_hmac_secret "my_very_secret_key";
                 secure_link_hmac_algorithm sha256;
 
-                proxy_pass http://backend_server_ip_$uri?st=$secure_link_token&ts=$time_iso8601&e=$expire;
+                proxy_pass http://backend_server$uri?st=$secure_link_token&ts=$time_iso8601&e=$expire;
         }
 
 
