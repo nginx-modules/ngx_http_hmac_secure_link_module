@@ -20,7 +20,7 @@ You'll need to re-compile Nginx from source to include this module.
 Modify your compile of Nginx by adding the following directive
 (modified to suit your path of course):
 
-./configure --with-http_ssl_module --add-module=/absolute/path/to/nginx-hmac-secure-link
+./configure --add-module=/absolute/path/to/nginx-hmac-secure-link
 make
 make install
 
@@ -111,14 +111,14 @@ The string to be signed is defined in secure_link_hmac_message, the secure_link_
 variable contains then a secure token to be passed to backend server.
 
 location ^~ /backend_location/ {
-                set $expire 60;
+    set $expire 60;
 
-                secure_link_hmac_message $uri$time_iso8601$expire;
-                secure_link_hmac_secret "my_very_secret_key";
-                secure_link_hmac_algorithm sha256;
+    secure_link_hmac_message $uri$time_iso8601$expire;
+    secure_link_hmac_secret "my_very_secret_key";
+    secure_link_hmac_algorithm sha256;
 
-                proxy_pass http://backend_server$uri?st=$secure_link_token&ts=$time_iso8601&e=$expire;
-        }
+    proxy_pass http://backend_server$uri?st=$secure_link_token&ts=$time_iso8601&e=$expire;
+}
 
 
 Contributing:

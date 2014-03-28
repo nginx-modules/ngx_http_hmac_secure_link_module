@@ -154,10 +154,13 @@ ngx_http_secure_link_variable(ngx_http_request_t *r,
                        "secure link token: \"%V\"", &value);
 
         ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                       "secure link timestamp: \"%*s\"", sizeof("1970-09-28T12:00:00+06:00")-1, p);
+                       "secure link timestamp: \"%*s\"",
+                        sizeof("1970-09-28T12:00:00+06:00")-1, p);
 
         /* Parse timestamp in ISO8601 format */
-        if (sscanf((char *)p, "%d-%d-%dT%d:%d:%d%c%d:%d", &year, &month, &mday, &hour, &min, &sec, &gmtoff_sign, &gmtoff_hour, &gmtoff_min) < 9) {
+        if (sscanf((char *)p, "%d-%d-%dT%d:%d:%d%c%d:%d",
+                               &year, &month, &mday, &hour, &min, &sec,
+                               &gmtoff_sign, &gmtoff_hour, &gmtoff_min) < 9) {
             goto not_found;
         }
 
@@ -201,7 +204,7 @@ ngx_http_secure_link_variable(ngx_http_request_t *r,
             goto not_found;
         }
 
-        /* Parse xxpiration period in seconds */
+        /* Parse expiration period in seconds */
         p = ngx_strlchr(p, last, ',');
 
         if (p) {
