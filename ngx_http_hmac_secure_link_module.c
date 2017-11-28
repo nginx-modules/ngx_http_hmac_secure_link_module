@@ -31,7 +31,6 @@ static void *ngx_http_secure_link_create_conf(ngx_conf_t *cf);
 static char *ngx_http_secure_link_merge_conf(ngx_conf_t *cf, void *parent,
     void *child);
 static ngx_int_t ngx_http_secure_link_add_variables(ngx_conf_t *cf);
-void ngx_secure_link_encode_base64url(ngx_str_t *dst, ngx_str_t *src);
 
 
 static ngx_command_t  ngx_http_hmac_secure_link_commands[] = {
@@ -331,7 +330,7 @@ ngx_http_secure_link_token_variable(ngx_http_request_t *r,
 
     HMAC(evp_md, key.data, key.len, value.data, value.len, hmac.data, &hmac.len);
 
-    ngx_secure_link_encode_base64url(&token, &hmac);
+    ngx_encode_base64url(&token, &hmac);
 
     v->data = token.data;
     v->len = token.len;
@@ -432,41 +431,4 @@ ngx_http_secure_link_add_variables(ngx_conf_t *cf)
     }
 
     return NGX_OK;
-}
-
-/* A copy of ngx_encode_base64url from ngx_string.c included in Nginx version 1.5.x */
-void
-ngx_secure_link_encode_base64url(ngx_str_t *dst, ngx_str_t *src)
-{
-    static u_char   basis64[] =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    u_char         *d, *s;
-    size_t          len;
-
-    len = src->len;
-    s = src->data;
-    d = dst->data;
-
-    while (len > 2) {
-        *d++ = basis64[(s[0] >> 2) & 0x3f];
-        *d++ = basis64[((s[0] & 3) << 4) | (s[1] >> 4)];
-        *d++ = basis64[((s[1] & 0x0f) << 2) | (s[2] >> 6)];
-        *d++ = basis64[s[2] & 0x3f];
-
-        s += 3;
-        len -= 3;
-    }
-
-    if (len) {
-        *d++ = basis64[(s[0] >> 2) & 0x3f];
-
-        if (len == 1) {
-            *d++ = basis64[(s[0] & 3) << 4];
-        } else {
-            *d++ = basis64[((s[0] & 3) << 4) | (s[1] >> 4)];
-            *d++ = basis64[(s[1] & 0x0f) << 2];
-        }
-    }
-
-    dst->len = d - dst->data;
 }
