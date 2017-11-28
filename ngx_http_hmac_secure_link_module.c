@@ -329,7 +329,7 @@ ngx_http_secure_link_token_variable(ngx_http_request_t *r,
     hmac.data = hmac_buf;
     token.data = p;
 
-    HMAC(evp_md, key.data, key.len, value.data, value.len, hmac.data, &hmac.len);
+    HMAC(evp_md, key.data, key.len, value.data, value.len, hmac.data, hmac.len);
 
     ngx_secure_link_encode_base64url(&token, &hmac);
 
