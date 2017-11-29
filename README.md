@@ -13,7 +13,16 @@ Installation:
 You'll need to re-compile Nginx from source to include this module.  
 Modify your compile of Nginx by adding the following directive (modified to suit your path of course):
 
+Static module (built-in nginx binary)
+
     ./configure --add-module=/absolute/path/to/nginx-hmac-secure-link
+
+Dynamic nginx module `ngx_http_hmac_secure_link_module.so` module
+
+    ./configure --add-dynamic-module=/absolute/path/to/nginx-hmac-secure-link
+
+Build Nginx
+
     make
     make install
 
