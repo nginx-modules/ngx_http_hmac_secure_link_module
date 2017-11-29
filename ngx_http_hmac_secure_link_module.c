@@ -116,15 +116,15 @@ static ngx_int_t
 ngx_http_secure_link_variable(ngx_http_request_t *r,
     ngx_http_variable_value_t *v, uintptr_t data)
 {
-    u_char                       *p, *last;
-    ngx_str_t                     value, hash, key;
-    time_t                        timestamp, expires, gmtoff;
     ngx_http_secure_link_ctx_t   *ctx;
     ngx_http_secure_link_conf_t  *conf;
-    u_char                        hash_buf[EVP_MAX_MD_SIZE], hmac_buf[EVP_MAX_MD_SIZE];
     const EVP_MD                 *evp_md;
+    u_char                       *p, *last;
+    ngx_str_t                     value, hash, key;
+    u_char                        hash_buf[EVP_MAX_MD_SIZE], hmac_buf[EVP_MAX_MD_SIZE];
     u_int                         hmac_len;
-    ngx_int_t                     year, month, mday, hour, min, sec, gmtoff_hour, gmtoff_min;
+    time_t                        timestamp, expires, gmtoff;
+    int_t                         year, month, mday, hour, min, sec, gmtoff_hour, gmtoff_min;
     char                          gmtoff_sign;
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_hmac_secure_link_module);
@@ -289,11 +289,11 @@ static ngx_int_t
 ngx_http_secure_link_token_variable(ngx_http_request_t *r,
     ngx_http_variable_value_t *v, uintptr_t data)
 {
-    ngx_str_t                     value, key, hmac, token;
     ngx_http_secure_link_conf_t  *conf;
-    u_char                        hmac_buf[EVP_MAX_MD_SIZE];
-    const EVP_MD                 *evp_md;
     u_char                       *p;
+    ngx_str_t                     value, key, hmac, token;
+    const EVP_MD                 *evp_md;
+    u_char                        hmac_buf[EVP_MAX_MD_SIZE];
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_hmac_secure_link_module);
 
@@ -328,7 +328,7 @@ ngx_http_secure_link_token_variable(ngx_http_request_t *r,
     hmac.data = hmac_buf;
     token.data = p;
 
-    HMAC(evp_md, key.data, key.len, value.data, value.len, hmac.data, &hmac.len);
+    HMAC(evp_md, key.data, key.len, value.data, value.len, hmac.data, (u_int *) &hmac.len);
 
     ngx_encode_base64url(&token, &hmac);
 
