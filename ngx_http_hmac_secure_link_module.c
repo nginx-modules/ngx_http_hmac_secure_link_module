@@ -124,7 +124,7 @@ ngx_http_secure_link_variable(ngx_http_request_t *r,
     u_char                        hash_buf[EVP_MAX_MD_SIZE], hmac_buf[EVP_MAX_MD_SIZE];
     u_int                         hmac_len;
     time_t                        timestamp, expires, gmtoff;
-    int_t                         year, month, mday, hour, min, sec, gmtoff_hour, gmtoff_min;
+    ngx_int_t                     year, month, mday, hour, min, sec, gmtoff_hour, gmtoff_min;
     char                          gmtoff_sign;
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_hmac_secure_link_module);
