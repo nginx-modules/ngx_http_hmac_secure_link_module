@@ -76,11 +76,11 @@ perl_set $secure_token '
         use POSIX qw(strftime);
 
         my $now = time();
+        my $key = "my_very_secret_key";
+        my $expire = 60;
         my $tz = strftime("%z", localtime($now));
         $tz =~ s/(\d{2})(\d{2})/$1:$2/;
         my $timestamp = strftime("%Y-%m-%dT%H:%M:%S", localtime($now)) . $tz;
-        my $expire = 60;
-        my $key = "my_very_secret_key";
         my $r = shift;
         my $data = $r->uri;
         my $digest = hmac_sha256_base64($data . $timestamp . $expire,  $key);
@@ -94,12 +94,11 @@ perl_set $secure_token '
 A similar function in PHP
 
 ```php
-$stringtosign = "/files/top_secret.pdf{$timestam}{$expire}";
 $secret = 'my_very_secret_key';
 $expire = 60;
 $algo = 'sha256';
 $timestamp = date('c');
-
+$stringtosign = "/files/top_secret.pdf{$timestam}{$expire}";
 $hashmac = base64_encode(hash_hmac($algo, $stringtosign, $secret, true));
 $hashmac = strtr($hashmac, '+/', '-_'));
 $hashmac = str_replace('=', '', $hashmac);
