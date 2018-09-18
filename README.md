@@ -98,7 +98,7 @@ $secret = 'my_very_secret_key';
 $expire = 60;
 $algo = 'sha256';
 $timestamp = date('c');
-$stringtosign = "/files/top_secret.pdf{$timestam}{$expire}";
+$stringtosign = "/files/top_secret.pdf{$timestamp}{$expire}";
 $hashmac = base64_encode(hash_hmac($algo, $stringtosign, $secret, true));
 $hashmac = strtr($hashmac, '+/', '-_'));
 $hashmac = str_replace('=', '', $hashmac);
