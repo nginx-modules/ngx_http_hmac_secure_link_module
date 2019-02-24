@@ -35,7 +35,7 @@ static ngx_int_t ngx_http_secure_link_add_variables(ngx_conf_t *cf);
 
 static ngx_command_t  ngx_http_hmac_secure_link_commands[] = {
 
-    { ngx_string("secure_link"),
+    { ngx_string("secure_link_hmac"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_http_set_complex_value_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
@@ -99,13 +99,13 @@ ngx_module_t  ngx_http_hmac_secure_link_module = {
 
 
 static ngx_http_variable_t ngx_http_secure_link_vars[] = {
-    { ngx_string("secure_link"), NULL,
+    { ngx_string("secure_link_hmac"), NULL,
       ngx_http_secure_link_variable, 0, NGX_HTTP_VAR_CHANGEABLE, 0 },
 
-    { ngx_string("secure_link_expires"), NULL,
+    { ngx_string("secure_link_hmac_expires"), NULL,
       ngx_http_secure_link_expires_variable, 0, NGX_HTTP_VAR_CHANGEABLE, 0 },
 
-    { ngx_string("secure_link_token"), NULL,
+    { ngx_string("secure_link_hmac_token"), NULL,
       ngx_http_secure_link_token_variable, 0, NGX_HTTP_VAR_CHANGEABLE, 0 },
 
     { ngx_null_string, NULL, NULL, 0, 0, 0}
@@ -124,7 +124,7 @@ ngx_http_secure_link_variable(ngx_http_request_t *r,
     u_char                        hash_buf[EVP_MAX_MD_SIZE], hmac_buf[EVP_MAX_MD_SIZE];
     u_int                         hmac_len;
     time_t                        timestamp, expires, gmtoff;
-    int_t                         year, month, mday, hour, min, sec, gmtoff_hour, gmtoff_min;
+    int                           year, month, mday, hour, min, sec, gmtoff_hour, gmtoff_min;
     char                          gmtoff_sign;
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_hmac_secure_link_module);
@@ -157,8 +157,10 @@ ngx_http_secure_link_variable(ngx_http_request_t *r,
                         sizeof("1970-09-28T12:00:00+06:00")-1, p);
 
         /* Parse timestamp in ISO8601 format */
-        if (sscanf((char *)p, "%d-%d-%dT%d:%d:%d%c%d:%d",
-                               &year, &month, &mday, &hour, &min, &sec,
+        if (sscanf((char *)p, "%4d-%02d-%02dT%02d:%02d:%02d%c%02d:%02d",
+                               (ngx_tm_year_t *) &year, (ngx_tm_mon_t *) &month,
+                               (ngx_tm_mday_t *) &mday, (ngx_tm_hour_t *) &hour,
+                               (ngx_tm_min_t *) &min, (ngx_tm_sec_t *) &sec,
                                &gmtoff_sign, &gmtoff_hour, &gmtoff_min) < 9) {
             goto not_found;
         }

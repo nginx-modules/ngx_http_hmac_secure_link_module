@@ -1,25 +1,25 @@
 Nginx HMAC Secure Link Module
---
+=============================
 
 Description:
---
+============
 
 The Nginx HMAC secure link module enhances the security and functionality of the standard secure link module.  
 Secure token is created using secure HMAC construction with an arbitrary hash algorithm supported by OpenSSL, e.g., `md5`, `sha1`, `sha256`, `sha512`. Furthermore, secure token is created as described in RFC2104, that is, `H(secret_key XOR opad,H(secret_key XOR ipad, message))` instead of a simple `MD5(secret_key,message, expire)`.
 
 Installation:
---
+=============
 
 You'll need to re-compile Nginx from source to include this module.  
 Modify your compile of Nginx by adding the following directive (modified to suit your path of course):
 
 Static module (built-in nginx binary)
 
-    ./configure --add-module=/absolute/path/to/nginx-hmac-secure-link
+    ./configure --add-module=/absolute/path/to/ngx_http_hmac_secure_link_module
 
 Dynamic nginx module `ngx_http_hmac_secure_link_module.so` module
 
-    ./configure --add-dynamic-module=/absolute/path/to/nginx-hmac-secure-link
+    ./configure --add-dynamic-module=/absolute/path/to/ngx_http_hmac_secure_link_module
 
 Build Nginx
 
@@ -27,7 +27,7 @@ Build Nginx
     make install
 
 Usage:
---
+======
 
 Message to be hashed is defined by `secure_link_hmac_message`, `secret_key` is given by `secure_link_hmac_secret`, and hashing algorithm H is defined by `secure_link_hmac_algorithm`.
 
@@ -40,7 +40,7 @@ Configuration example for server side.
 ```nginx
 location ^~ /files/ {
     # Variable to be passed are secure token, timestamp, expiration period (optional)
-    secure_link  $arg_st,$arg_ts,$arg_e;
+    secure_link_hmac  $arg_st,$arg_ts,$arg_e;
 
     # Secret key
     secure_link_hmac_secret my_secret_key;
@@ -51,13 +51,13 @@ location ^~ /files/ {
     # Cryptographic hash function to be used
     secure_link_hmac_algorithm sha256;
 
-    # If the hash is incorrect then $secure_link is a null string.
-    # If the hash is correct but the link has already expired then $secure_link is zero.
-    # If the hash is correct and the link has not expired then $secure_link is one.
+    # If the hash is incorrect then $secure_link_hmac is a null string.
+    # If the hash is correct but the link has already expired then $secure_link_hmac is zero.
+    # If the hash is correct and the link has not expired then $secure_link_hmac is one.
 
     # In production environment, we should not reveal to potential attacker
     # why hmac authentication has failed
-    if ($secure_link != "1") {
+    if ($secure_link_hmac != "1") {
         return 404;
     }
 
@@ -108,7 +108,7 @@ $loc = "https://{$host}/files/top_secret.pdf?st={$hashmac}&ts={$timestamp}&e={$e
 
 It is also possible to use this module with a Nginx acting as proxy server.
 
-The string to be signed is defined in `secure_link_hmac_message`, the `secure_link_token` variable contains then a secure token to be passed to backend server.
+The string to be signed is defined in `secure_link_hmac_message`, the `secure_link_hmac_token` variable contains then a secure token to be passed to backend server.
 
 ```nginx
 location ^~ /backend_location/ {
@@ -118,14 +118,21 @@ location ^~ /backend_location/ {
     secure_link_hmac_secret "my_very_secret_key";
     secure_link_hmac_algorithm sha256;
 
-    proxy_pass "http://backend_server$uri?st=$secure_link_token&ts=$time_iso8601&e=$expire";
+    proxy_pass "http://backend_server$uri?st=$secure_link_hmac_token&ts=$time_iso8601&e=$expire";
 }
 ```
 
 
-Contributing:
---
+Embedded Variables
+==================
+* `$secure_link_hmac` - 
+* `$secure_link_hmac_token` - 
+* `$secure_link_hmac_expires` - The lifetime of a link passed in a request.
 
-Git source repositories: http://github.com/nginx-modules/nginx-hmac-secure-link/tree/master
+
+Contributing:
+=============
+
+Git source repositories: http://github.com/nginx-modules/ngx_http_hmac_secure_link_module/tree/master
 
 Please feel free to fork the project at GitHub and submit pull requests or patches.
