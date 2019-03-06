@@ -36,7 +36,7 @@ Usage:
 
 Message to be hashed is defined by `secure_link_hmac_message`, `secret_key` is given by `secure_link_hmac_secret`, and hashing algorithm H is defined by `secure_link_hmac_algorithm`.
 
-For improved security the timestamp in ISO 8601 format should be appended to the message to be hashed.
+For improved security the timestamp in ISO 8601 the format `2017-12-08T07:54:59+00:00` (one possibility according to ISO 8601) or as `Unix Timestamp` should be appended to the message to be hashed.
 
 It is possible to create links with limited lifetime. This is defined by an optional parameter. If the expiration period is zero or it is not specified, a link has the unlimited lifetime.
 
@@ -109,6 +109,21 @@ $hashmac = strtr($hashmac, '+/', '-_'));
 $hashmac = str_replace('=', '', $hashmac);
 $host = $_SERVER['HTTP_HOST'];
 $loc = "https://{$host}/files/top_secret.pdf?st={$hashmac}&ts={$timestamp}&e={$expire}";
+```
+
+Using Unix timestamp in Node.js
+
+```javascript
+const crypto = require("crypto");
+const secret = 'my_very_secret_key';
+const expire = 60;
+const unixTimestamp = Math.round(Date.now() / 1000.);
+const stringToSign = `/files/top_secret.pdf${unixTimestamp}${expire}`;
+const hashmac = crypto.createHmac('sha256', secret).update(stringToSign).digest('base64')
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
+const loc = `https://host/files/top_secret.pdf?st=${hashmac}&ts=${unixTimestamp}&e=${expire}`;
 ```
 
 It is also possible to use this module with a Nginx acting as proxy server.
