@@ -124,6 +124,7 @@ ngx_http_secure_link_variable(ngx_http_request_t *r,
     u_char                        hash_buf[EVP_MAX_MD_SIZE], hmac_buf[EVP_MAX_MD_SIZE];
     u_int                         hmac_len;
     time_t                        timestamp, expires, gmtoff;
+    unsigned long long            conv_timestamp;
     int                           year, month, mday, hour, min, sec, gmtoff_hour, gmtoff_min;
     char                          gmtoff_sign;
 
@@ -156,50 +157,58 @@ ngx_http_secure_link_variable(ngx_http_request_t *r,
                        "secure link timestamp: \"%*s\"",
                         sizeof("1970-09-28T12:00:00+06:00")-1, p);
 
-        /* Parse timestamp in ISO8601 format */
-        if (sscanf((char *)p, "%4d-%02d-%02dT%02d:%02d:%02d%c%02i:%02i",
-                               (ngx_tm_year_t *) &year, (ngx_tm_mon_t *) &month,
-                               (ngx_tm_mday_t *) &mday, (ngx_tm_hour_t *) &hour,
-                               (ngx_tm_min_t *) &min, (ngx_tm_sec_t *) &sec,
-                               &gmtoff_sign, &gmtoff_hour, &gmtoff_min) < 9) {
-            goto not_found;
+        /* Try if p is UNIX timestamp*/
+        if (sscanf((char *)p, "%llu", &conv_timestamp) == 1) {
+            timestamp = (time_t)conv_timestamp;
+
+            ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                           "secure link timestamp: \"%T\"", timestamp);
+        } else {
+            /* Parse timestamp in ISO8601 format */
+            if (sscanf((char *)p, "%4d-%02d-%02dT%02d:%02d:%02d%c%02i:%02i",
+                                   (ngx_tm_year_t *) &year, (ngx_tm_mon_t *) &month,
+                                   (ngx_tm_mday_t *) &mday, (ngx_tm_hour_t *) &hour,
+                                   (ngx_tm_min_t *) &min, (ngx_tm_sec_t *) &sec,
+                                   &gmtoff_sign, &gmtoff_hour, &gmtoff_min) < 9) {
+                goto not_found;
+            }
+
+            /* Put February last because it has leap day */
+            month -= 2;
+            if (month <= 0) {
+                month += 12;
+                year -= 1;
+            }
+
+            /* Gauss' formula for Gregorian days since March 1, 1 BC */
+            /* Taken from ngx_http_parse_time.c */
+            timestamp = (time_t) (
+                         /* days in years including leap years since March 1, 1 BC */
+                         365 * year + year / 4 - year / 100 + year / 400
+                         /* days before the month */
+                         + 367 * month / 12 - 30
+                         /* days before the day */
+                         + mday - 1
+                         /*
+                          * 719527 days were between March 1, 1 BC and March 1, 1970,
+                          * 31 and 28 days were in January and February 1970
+                          */
+                         - 719527 + 31 + 28) * 86400 + hour * 3600 + min * 60 + sec;
+
+            /* Determine the time offset with respect to GMT */
+            gmtoff = 3600 * gmtoff_hour + 60 * gmtoff_min;
+
+            if (gmtoff_sign == '+') {
+                timestamp -= gmtoff;
+            }
+
+            if (gmtoff_sign == '-') {
+                timestamp += gmtoff;
+            }
+
+            ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                           "secure link timestamp: \"%T\"", timestamp);
         }
-
-        /* Put February last because it has leap day */
-        month -= 2;
-        if (month <= 0) {
-            month += 12;
-            year -= 1;
-        }
-
-        /* Gauss' formula for Gregorian days since March 1, 1 BC */
-        /* Taken from ngx_http_parse_time.c */
-        timestamp = (time_t) (
-                     /* days in years including leap years since March 1, 1 BC */
-                     365 * year + year / 4 - year / 100 + year / 400
-                     /* days before the month */
-                     + 367 * month / 12 - 30
-                     /* days before the day */
-                     + mday - 1
-                     /*
-                      * 719527 days were between March 1, 1 BC and March 1, 1970,
-                      * 31 and 28 days were in January and February 1970
-                      */
-                     - 719527 + 31 + 28) * 86400 + hour * 3600 + min * 60 + sec;
-
-        /* Determine the time offset with respect to GMT */
-        gmtoff = 3600 * gmtoff_hour + 60 * gmtoff_min;
-
-        if (gmtoff_sign == '+') {
-            timestamp -= gmtoff;
-        }
-
-        if (gmtoff_sign == '-') {
-            timestamp += gmtoff;
-        }
-
-        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                       "secure link timestamp: \"%T\"", timestamp);
 
         if (timestamp <= 0) {
             goto not_found;
