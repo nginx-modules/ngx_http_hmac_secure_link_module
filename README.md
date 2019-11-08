@@ -51,7 +51,7 @@ location ^~ /files/ {
     secure_link_hmac_secret my_secret_key;
 
     # Message to be verified
-    secure_link_hmac_message $uri$arg_ts$arg_e;
+    secure_link_hmac_message $uri^$arg_ts^$arg_e;
 
     # Cryptographic hash function to be used
     secure_link_hmac_algorithm sha256;
@@ -88,7 +88,7 @@ perl_set $secure_token '
         my $timestamp = strftime("%Y-%m-%dT%H:%M:%S", localtime($now)) . $tz;
         my $r = shift;
         my $data = $r->uri;
-        my $digest = hmac_sha256_base64($data . $timestamp . $expire,  $key);
+        my $digest = hmac_sha256_base64($data . "^" . $timestamp . "^" . $expire,  $key);
         $digest =~ tr(+/)(-_);
         $data = "st=" . $digest . "&ts=" . $timestamp . "&e=" . $expire;
         return $data;
@@ -103,7 +103,7 @@ $secret = 'my_very_secret_key';
 $expire = 60;
 $algo = 'sha256';
 $timestamp = date('c');
-$stringtosign = "/files/top_secret.pdf{$timestamp}{$expire}";
+$stringtosign = "/files/top_secret.pdf^{$timestamp}^{$expire}";
 $hashmac = base64_encode(hash_hmac($algo, $stringtosign, $secret, true));
 $hashmac = strtr($hashmac, '+/', '-_'));
 $hashmac = str_replace('=', '', $hashmac);
@@ -118,7 +118,7 @@ const crypto = require("crypto");
 const secret = 'my_very_secret_key';
 const expire = 60;
 const unixTimestamp = Math.round(Date.now() / 1000.);
-const stringToSign = `/files/top_secret.pdf${unixTimestamp}${expire}`;
+const stringToSign = `/files/top_secret.pdf^${unixTimestamp}^${expire}`;
 const hashmac = crypto.createHmac('sha256', secret).update(stringToSign).digest('base64')
       .replace(/=/g, '')
       .replace(/\+/g, '-')
@@ -134,7 +134,7 @@ The string to be signed is defined in `secure_link_hmac_message`, the `secure_li
 location ^~ /backend_location/ {
     set $expire 60;
 
-    secure_link_hmac_message "$uri$time_iso8601$expire";
+    secure_link_hmac_message "$uri^$time_iso8601^$expire";
     secure_link_hmac_secret "my_very_secret_key";
     secure_link_hmac_algorithm sha256;
 
