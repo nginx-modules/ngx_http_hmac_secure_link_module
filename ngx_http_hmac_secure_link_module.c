@@ -305,6 +305,7 @@ ngx_http_secure_link_token_variable(ngx_http_request_t *r,
     ngx_str_t                     value, key, hmac, token;
     const EVP_MD                 *evp_md;
     u_char                        hmac_buf[EVP_MAX_MD_SIZE];
+    u_char			 *md;
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_hmac_secure_link_module);
 
@@ -314,6 +315,11 @@ ngx_http_secure_link_token_variable(ngx_http_request_t *r,
 
     p = ngx_pnalloc(r->pool, ngx_base64_encoded_length(EVP_MAX_MD_SIZE));
     if (p == NULL) {
+        return NGX_ERROR;
+    }
+
+    md = ngx_pnalloc(r->pool, EVP_MAX_MD_SIZE);
+    if (md == NULL) {
         return NGX_ERROR;
     }
 
@@ -336,15 +342,21 @@ ngx_http_secure_link_token_variable(ngx_http_request_t *r,
         return NGX_ERROR;
     }
 
+    hmac.len  = (u_int) EVP_MD_size(evp_md);
     hmac.data = hmac_buf;
     token.data = p;
 
     HMAC(evp_md, key.data, key.len, value.data, value.len, hmac.data, (u_int *) &hmac.len);
 
-    ngx_encode_base64url(&token, &hmac);
 
-    v->data = token.data;
-    v->len = token.len;
+    ngx_encode_base64(&token, &hmac);
+
+    ngx_escape_uri(md, token.data, token.len, NGX_ESCAPE_URI_COMPONENT);
+    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+		    "base64 uri escape token : \"%s\" (len:%d)", md, ngx_strlen(md));
+
+    v->data = md;
+    v->len = ngx_strlen(md);
     v->valid = 1;
     v->no_cacheable = 0;
     v->not_found = 0;
