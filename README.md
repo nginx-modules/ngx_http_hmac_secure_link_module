@@ -126,6 +126,21 @@ const hashmac = crypto.createHmac('sha256', secret).update(stringToSign).digest(
 const loc = `https://host/files/top_secret.pdf?st=${hashmac}&ts=${unixTimestamp}&e=${expire}`;
 ```
 
+Bash version
+
+```shell
+#!/bin/bash
+
+SECRET="my_super_secret"
+TIME_STAMP="$(date -d "today + 0 minutes" +%s)";
+EXPIRES="3600"; # seconds
+URL="/file/my_secret_file.txt"
+ST="$URL|$TIME_STAMP|$EXPIRES"
+TOKEN="$(echo -n $ST | openssl dgst -sha256 -hmac $SECRET -binary | openssl base64 | tr +/ -_ | tr -d =)"
+
+echo "http://127.0.0.1$URL?st=$TOKEN&ts=$TIME_STAMP&e=$EXPIRES"
+```
+
 It is also possible to use this module with a Nginx acting as proxy server.
 
 The string to be signed is defined in `secure_link_hmac_message`, the `secure_link_hmac_token` variable contains then a secure token to be passed to backend server.
@@ -145,8 +160,8 @@ location ^~ /backend_location/ {
 
 Embedded Variables
 ==================
-* `$secure_link_hmac` - 
-* `$secure_link_hmac_token` - 
+* `$secure_link_hmac` -
+* `$secure_link_hmac_token` -
 * `$secure_link_hmac_expires` - The lifetime of a link passed in a request.
 
 
