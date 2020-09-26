@@ -105,7 +105,7 @@ $algo = 'sha256';
 $timestamp = date('c');
 $stringtosign = "/files/top_secret.pdf|{$timestamp}|{$expire}";
 $hashmac = base64_encode(hash_hmac($algo, $stringtosign, $secret, true));
-$hashmac = strtr($hashmac, '+/', '-_'));
+$hashmac = strtr($hashmac, '+/', '-_');
 $hashmac = str_replace('=', '', $hashmac);
 $host = $_SERVER['HTTP_HOST'];
 $loc = "https://{$host}/files/top_secret.pdf?st={$hashmac}&ts={$timestamp}&e={$expire}";
