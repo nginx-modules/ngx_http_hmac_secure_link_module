@@ -45,23 +45,22 @@ Configuration example for server side.
 ```nginx
 location ^~ /files/ {
     # Variable to be passed are secure token, timestamp, expiration period (optional)
-    secure_link_hmac  $arg_st,$arg_ts,$arg_e;
+    secure_link_hmac "$arg_st,$arg_ts,$arg_e";
 
     # Secret key
-    secure_link_hmac_secret my_secret_key;
+    secure_link_hmac_secret "my_secret_key";
 
     # Message to be verified
-    secure_link_hmac_message $uri|$arg_ts|$arg_e;
+    secure_link_hmac_message "$uri|$arg_ts|$arg_e";
 
     # Cryptographic hash function to be used
     secure_link_hmac_algorithm sha256;
 
-    # If the hash is incorrect then $secure_link_hmac is a null string.
-    # If the hash is correct but the link has already expired then $secure_link_hmac is zero.
-    # If the hash is correct and the link has not expired then $secure_link_hmac is one.
-
     # In production environment, we should not reveal to potential attacker
     # why hmac authentication has failed
+    # - If the hash is incorrect then $secure_link_hmac is a NULL string.
+    # - If the hash is correct but the link has already expired then $secure_link_hmac is "0".
+    # - If the hash is correct and the link has not expired then $secure_link_hmac is "1".
     if ($secure_link_hmac != "1") {
         return 404;
     }
