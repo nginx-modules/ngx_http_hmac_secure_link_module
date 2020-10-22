@@ -102,12 +102,13 @@ $secret = 'my_very_secret_key';
 $expire = 60;
 $algo = 'sha256';
 $timestamp = date('c');
-$stringtosign = "/files/top_secret.pdf|{$timestamp}|{$expire}";
+$unixtimestamp = time();
+$stringtosign = "/files/top_secret.pdf|{$unixtimestamp}|{$expire}";
 $hashmac = base64_encode(hash_hmac($algo, $stringtosign, $secret, true));
 $hashmac = strtr($hashmac, '+/', '-_');
 $hashmac = str_replace('=', '', $hashmac);
 $host = $_SERVER['HTTP_HOST'];
-$loc = "https://{$host}/files/top_secret.pdf?st={$hashmac}&ts={$timestamp}&e={$expire}";
+$loc = "https://{$host}/files/top_secret.pdf?st={$hashmac}&ts={$unixtimestamp}&e={$expire}";
 ```
 
 Using Unix timestamp in Node.js
