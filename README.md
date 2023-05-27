@@ -24,7 +24,7 @@ Static module (built-in nginx binary)
 
 Dynamic nginx module `ngx_http_hmac_secure_link_module.so` module
 
-    ./configure --add-dynamic-module=/absolute/path/to/ngx_http_hmac_secure_link_module
+    ./configure --with-compat --add-dynamic-module=/absolute/path/to/ngx_http_hmac_secure_link_module
 
 Build Nginx
 
