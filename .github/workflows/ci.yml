@@ -1,0 +1,302 @@
+name: CI
+
+on:
+  push:
+    branches: ["master", "main", "develop"]
+  pull_request:
+    branches: ["master", "main", "develop"]
+
+# ---------------------------------------------------------------------------
+# Concurrency: cancel in-progress runs on the same ref so that only the
+# latest commit on a branch is tested when pushes arrive quickly.
+# ---------------------------------------------------------------------------
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: "nginx-${{ matrix.nginx }} / openssl-${{ matrix.openssl }} / ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # -----------------------------------------------------------------------
+        # Explicit include-only matrix — no cross-product, full control.
+        #
+        # NGINX version notes:
+        #   1.20.2  legacy (Aug 2021) — PCRE1 only; ubuntu-22.04 exclusively
+        #           (libpcre3-dev in main, gcc 11 compatible with that vintage).
+        #   1.26.3  legacy stable branch.
+        #   1.28.3  current stable  (even minor = stable).
+        #   1.29.7  current mainline (odd  minor = mainline).
+        #
+        # The "pcre" field is consumed by the install steps below; it does not
+        # affect the job name shown in the GitHub UI.
+        # -----------------------------------------------------------------------
+        include:
+          # -- Legacy: NGINX 1.20.2, PCRE1, Ubuntu 22.04 only ------------------
+          - { os: ubuntu-22.04, nginx: "1.20.2", openssl: system, pcre: pcre1 }
+
+          # -- Legacy stable: NGINX 1.26.3 -------------------------------------
+          - { os: ubuntu-22.04, nginx: "1.26.3", openssl: system, pcre: pcre2 }
+          - { os: ubuntu-24.04, nginx: "1.26.3", openssl: system, pcre: pcre2 }
+
+          # -- Current stable: NGINX 1.28.3 ------------------------------------
+          - { os: ubuntu-22.04, nginx: "1.28.3", openssl: system, pcre: pcre2 }
+          - { os: ubuntu-24.04, nginx: "1.28.3", openssl: system, pcre: pcre2 }
+
+          # -- Mainline: NGINX 1.29.7 -------------------------------------------
+          - { os: ubuntu-22.04, nginx: "1.29.7", openssl: system, pcre: pcre2 }
+          - { os: ubuntu-24.04, nginx: "1.29.7", openssl: system, pcre: pcre2 }
+
+          # -- Pinned OpenSSL 3.6.1 — exercises the EVP_MAC code path -----------
+          # OpenSSL is built from source as a static-only (no-shared) install
+          # into ~/openssl, then nginx is pointed at it via --with-cc-opt and
+          # --with-ld-opt only — NOT --with-openssl=<src>.
+          #
+          # Why NOT --with-openssl=<src>:
+          #   nginx's Makefile always injects a bare "-lcrypto" flag before the
+          #   explicit static archive paths in the final link command.  When
+          #   --with-openssl=<src> is used, the search path does not include the
+          #   internal .openssl/lib directory, so that bare flag fails with
+          #   "cannot find -lcrypto" once libssl-dev is absent.
+          #
+          # Why libssl-dev must NOT be installed for these jobs:
+          #   With libssl-dev present, "-lcrypto" resolves to the system's
+          #   libcrypto.so.3 (OpenSSL 3.0.x) regardless of what comes later in
+          #   the link command, producing a binary that runs with the wrong
+          #   version.  Without libssl-dev, "-lcrypto" and "-lssl" resolve
+          #   exclusively to the static archives in ~/openssl/lib64 via the
+          #   -L flag in --with-ld-opt.
+          #
+          # Only ubuntu-24.04; only the three currently maintained nginx versions.
+          - { os: ubuntu-24.04, nginx: "1.26.3", openssl: "3.6.1", pcre: pcre2 }
+          - { os: ubuntu-24.04, nginx: "1.28.3", openssl: "3.6.1", pcre: pcre2 }
+          - { os: ubuntu-24.04, nginx: "1.29.7", openssl: "3.6.1", pcre: pcre2 }
+
+    steps:
+      # -----------------------------------------------------------------------
+      - name: Checkout module source
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            zlib1g-dev      \
+            curl            \
+            ca-certificates
+
+      # -----------------------------------------------------------------------
+      # libssl-dev provides the system OpenSSL headers and shared libraries.
+      # It is required for system OpenSSL jobs (headers + libcrypto.so for
+      # nginx's configure feature tests and final linking).
+      #
+      # It must NOT be installed for pinned OpenSSL jobs — see matrix comment.
+      # -----------------------------------------------------------------------
+      - name: Install system OpenSSL headers (system OpenSSL jobs only)
+        if: matrix.openssl == 'system'
+        run: sudo apt-get install -y --no-install-recommends libssl-dev
+
+      # -----------------------------------------------------------------------
+      # PCRE: NGINX 1.20.x requires PCRE1 (libpcre3-dev).
+      #       NGINX 1.26+   uses PCRE2 (libpcre2-dev) by default.
+      # -----------------------------------------------------------------------
+      - name: Install PCRE1 (NGINX 1.20.x legacy)
+        if: matrix.pcre == 'pcre1'
+        run: sudo apt-get install -y --no-install-recommends libpcre3-dev
+
+      - name: Install PCRE2 (NGINX 1.26+)
+        if: matrix.pcre == 'pcre2'
+        run: sudo apt-get install -y --no-install-recommends libpcre2-dev
+
+      # -----------------------------------------------------------------------
+      # Cache the installed static OpenSSL tree (~/openssl).
+      # Key: version + OS.  Bump -vN to bust manually if needed.
+      #
+      # Note on "Failed to save" warnings: GitHub Actions has no write lock on
+      # cache keys.  When several jobs share the same key and finish concurrently
+      # for the first time, the first writer wins and the rest log a warning.
+      # This is harmless — all jobs read the cache successfully on subsequent
+      # runs.  It is a first-run-only occurrence.
+      # -----------------------------------------------------------------------
+      - name: Cache OpenSSL ${{ matrix.openssl }} build
+        if: matrix.openssl != 'system'
+        id: cache-openssl
+        uses: actions/cache@v4
+        with:
+          path: ~/openssl
+          key: openssl-${{ matrix.openssl }}-${{ matrix.os }}-v1
+
+      # -----------------------------------------------------------------------
+      # Build OpenSSL from source only on cache miss.
+      #
+      # "make build_sw" compiles libraries + CLI only — it skips the full test
+      # suite (200+ binaries) that "make" would build, saving several minutes.
+      # "make install_sw" installs into ~/openssl without docs or man pages.
+      # -----------------------------------------------------------------------
+      - name: Build OpenSSL ${{ matrix.openssl }} from source
+        if: matrix.openssl != 'system' && steps.cache-openssl.outputs.cache-hit != 'true'
+        env:
+          OPENSSL_VERSION: ${{ matrix.openssl }}
+        run: |
+          curl -fsSL \
+            "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz" \
+            -o openssl.tar.gz
+          tar xf openssl.tar.gz
+          cd "openssl-${OPENSSL_VERSION}"
+          ./Configure --prefix="${HOME}/openssl" \
+                      --openssldir="${HOME}/openssl" \
+                      no-shared linux-x86_64
+          make -j"$(nproc)" build_sw
+          make install_sw
+
+      # -----------------------------------------------------------------------
+      - name: Download and extract NGINX ${{ matrix.nginx }}
+        env:
+          NGINX_VERSION: ${{ matrix.nginx }}
+        run: |
+          curl -fsSL \
+            "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz" \
+            -o nginx.tar.gz
+          tar xf nginx.tar.gz
+          echo "NGINX_SRC=${PWD}/nginx-${NGINX_VERSION}" >> "${GITHUB_ENV}"
+
+      # -----------------------------------------------------------------------
+      - name: Configure NGINX (system OpenSSL)
+        if: matrix.openssl == 'system'
+        run: |
+          cd "${NGINX_SRC}"
+          ./configure \
+            --with-http_ssl_module  \
+            --with-http_v2_module   \
+            --add-module="${GITHUB_WORKSPACE}" \
+            --with-cc-opt="-Wall -Wextra -Wno-unused-parameter" \
+            2>&1 | tee configure.log
+
+      # -----------------------------------------------------------------------
+      # Pinned OpenSSL: configure nginx using --with-cc-opt / --with-ld-opt
+      # pointing at ~/openssl.  --with-openssl=<src> is intentionally omitted.
+      #
+      # --with-cc-opt: supplies the 3.6.1 headers for compilation.
+      # --with-ld-opt: adds ~/openssl/lib64 to the linker search path so that
+      #   the "-lssl" and "-lcrypto" flags nginx injects resolve to the static
+      #   archives there.  -ldl and -pthread satisfy OpenSSL's own link deps
+      #   when statically linked.
+      # -----------------------------------------------------------------------
+      - name: Configure NGINX (pinned OpenSSL ${{ matrix.openssl }})
+        if: matrix.openssl != 'system'
+        run: |
+          cd "${NGINX_SRC}"
+          ./configure \
+            --with-http_ssl_module  \
+            --with-http_v2_module   \
+            --with-cc-opt="-Wall -Wextra -Wno-unused-parameter -I${HOME}/openssl/include" \
+            --with-ld-opt="-L${HOME}/openssl/lib64 -ldl -pthread" \
+            --add-module="${GITHUB_WORKSPACE}" \
+            2>&1 | tee configure.log
+
+      # -----------------------------------------------------------------------
+      - name: Build NGINX
+        run: |
+          cd "${NGINX_SRC}"
+          make -j"$(nproc)" 2>&1 | tee build.log
+          ls -lh objs/nginx
+          objs/nginx -V 2>&1
+
+      # -----------------------------------------------------------------------
+      - name: Upload configure / build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-nginx${{ matrix.nginx }}-ossl${{ matrix.openssl }}-${{ matrix.os }}
+          path: |
+            ${{ env.NGINX_SRC }}/configure.log
+            ${{ env.NGINX_SRC }}/build.log
+
+      # -----------------------------------------------------------------------
+      # Cache cpanm-installed Perl modules (Test::Nginx + ~17 deps).
+      # apt packages (cpanminus, libdigest-*) are fast and not cached.
+      #
+      # Both paths are required:
+      #   /usr/local/share/perl  — pure-Perl modules
+      #   /usr/local/lib/perl5   — XS modules (e.g. List::MoreUtils::XS)
+      #
+      # "Failed to save" on first run: see OpenSSL cache note above — same
+      # mechanism.  Harmless; all parallel jobs on subsequent runs get hits.
+      # -----------------------------------------------------------------------
+      - name: Cache Perl dependencies
+        id: cache-perl
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/share/perl
+            /usr/local/lib/perl5
+          key: perl-test-nginx-0.32-${{ matrix.os }}-v1
+
+      - name: Install Perl test dependencies
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            cpanminus            \
+            libdigest-sha-perl   \
+            libdigest-hmac-perl  \
+            liburi-perl
+          if [ "${{ steps.cache-perl.outputs.cache-hit }}" != "true" ]; then
+            sudo cpanm --notest Test::Nginx
+          fi
+
+      # -----------------------------------------------------------------------
+      - name: Verify NGINX binary
+        run: |
+          "${NGINX_SRC}/objs/nginx" -V 2>&1
+
+      # -----------------------------------------------------------------------
+      - name: Syntax-check test files
+        run: |
+          for f in t/01_basic.t t/02_timestamps.t t/03_algorithms.t \
+                   t/04_variables.t t/05_integration.t; do
+            perl -I t/lib -c "$f"
+          done
+
+      # -----------------------------------------------------------------------
+      - name: Run test suite
+        env:
+          TEST_NGINX_BINARY: "${{ env.NGINX_SRC }}/objs/nginx"
+          TEST_NGINX_SERVROOT: "${{ runner.temp }}/nginx-test"
+        run: prove -I t/lib -v --timer t/
+
+      # -----------------------------------------------------------------------
+      - name: Upload nginx error log on test failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nginx-error-log-nginx${{ matrix.nginx }}-ossl${{ matrix.openssl }}-${{ matrix.os }}
+          path: "${{ runner.temp }}/nginx-test/logs/error.log"
+
+  # ---------------------------------------------------------------------------
+  # Lint: cppcheck static analysis — fast, no NGINX source needed.
+  # ---------------------------------------------------------------------------
+  lint:
+    name: "cppcheck static analysis"
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck
+        run: |
+          cppcheck \
+            --enable=all   \
+            --inconclusive \
+            --std=c99      \
+            --suppress=missingIncludeSystem \
+            --suppress=variableScope \
+            --error-exitcode=1 \
+            ngx_http_hmac_secure_link_module.c 2>&1
