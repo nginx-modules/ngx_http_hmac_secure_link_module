@@ -1,6 +1,8 @@
 Nginx HMAC Secure Link Module
 =============================
 
+![NGINX HMAC Secure Link Module – High Security URL Token Authentication Module](https://repository-images.githubusercontent.com/18655654/c09c07d8-2b79-4917-96a7-e585852c7c8b)
+
 Description
 -----------
 
